@@ -1,0 +1,2 @@
+# Production dependencies only
+openpyxl>=3.1.0
