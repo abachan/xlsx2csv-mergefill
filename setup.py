@@ -8,7 +8,7 @@ README = (Path(__file__).parent / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="xlsx2csv-mergefill",
-    version="1.0.0",
+    version="1.0.1",
     description="Excel→CSV with merged-cell fill (cp932), simple API",
     long_description=README,
     long_description_content_type="text/markdown",

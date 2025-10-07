@@ -25,7 +25,7 @@ from xlsx2csv_mergefill import convert_file
 convert_file("input.xlsx", "output")
 ```
 
-→ `output_シート名.csv` という形式で出力されます。
+→ 複数シートの場合は `<指定パスの拡張子なし>_シート名.csv` という形式で同ディレクトリに複数出力されます。単一シートの場合は第2引数で指定したパスに1ファイルをそのまま出力します（拡張子の自動付与は行いません）。
 
 ### 2. 特定シートをPythonリストとして読み込み
 
@@ -46,7 +46,7 @@ data = read_workbook("input.xlsx")
 **引数**
 
 * `input_path`: 入力Excelファイルのパス
-* `output_prefix`: 出力ファイル名のプレフィックス（例：`output` → `output_シート名.csv`）
+* `output_path`: 出力先のパス。複数シートの場合はプレフィックスとして扱われ、`<指定パスの拡張子なし>_シート名.csv` を同ディレクトリに出力します。単一シートの場合はこのパスにそのまま出力します（例：`out.csv` を指定すると `out.csv` を出力）。
 
 **戻り値**
 
