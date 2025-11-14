@@ -152,9 +152,9 @@ def data_to_csv_string(data: List[List[Optional[object]]]) -> str:
 
 
 def _write_csv(rows: Iterable[List[Optional[object]]], out_path: Path) -> None:
-    """内部用CSV書き込み関数（cp932/カンマ区切り固定）"""
+    """内部用CSV書き込み関数（UTF-8/カンマ区切り固定）"""
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", newline="", encoding="cp932") as f:
+    with out_path.open("w", newline="", encoding="UTF-8") as f:
         writer = csv.writer(f, delimiter=",", quoting=csv.QUOTE_MINIMAL)
         for row in rows:
             writer.writerow(["" if v is None else str(v) for v in row])

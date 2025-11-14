@@ -1,5 +1,5 @@
 """
-xlsx2csv-mergefill: Excel→CSV with merged-cell fill (cp932)
+xlsx2csv-mergefill: Excel→CSV with merged-cell fill (UTF-8)
 
 Public API for xlsx2csv-mergefill package.
 """

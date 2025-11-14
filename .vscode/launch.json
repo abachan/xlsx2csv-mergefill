@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Audit Qiita -> Zenn",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}\\tools\\qiita_migration\\audit.py",
+      "args": [
+        "--user", "abachan",
+        "--out-dir", ".\\qiita_export\\abachan"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}
