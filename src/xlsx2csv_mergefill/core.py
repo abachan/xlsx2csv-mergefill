@@ -61,12 +61,22 @@ def _iter_rows_values(ws: Worksheet) -> Iterable[List[Optional[object]]]:
         yield row_vals
 
 
-def convert_file(input_xlsx: Path | str, output_csv: Path | str) -> int:
+def convert_file(input_xlsx: Path | str, output_csv: Path | str, use_numeric_sheet_names: bool = False, include_hidden_sheets: bool = False) -> int:
     """
     ExcelファイルをCSVファイルに変換する（シンプル版）
+    
+    Args:
+        input_xlsx: 入力Excelファイルのパス
+        output_csv: 出力CSVファイルのパス
+        use_numeric_sheet_names: Trueの場合、シート名を数値でカウントアップ（0, 1, 2...）
+        include_hidden_sheets: Trueの場合、非表示シートも出力する。デフォルトはFalse
     """
     wb = _load_workbook(input_xlsx)
     sheets = wb.worksheets
+    
+    # 非表示シートをフィルタリング（オプションによる）
+    if not include_hidden_sheets:
+        sheets = [ws for ws in sheets if ws.sheet_state == 'visible']
     
     if not sheets:
         raise ValueError("ワークシートが見つかりません")
@@ -74,21 +84,21 @@ def convert_file(input_xlsx: Path | str, output_csv: Path | str) -> int:
     output_path = Path(output_csv)
     base_output = output_path.with_suffix("")
     
-    if len(sheets) == 1:
-        _write_csv(_iter_rows_values(sheets[0]), output_path)
-    else:
-        for ws in sheets:
-            safe_sheet_name = _sanitize_filename(ws.title)
-            target_path = base_output.parent / f"{base_output.name}_{safe_sheet_name}.csv"
-            _write_csv(_iter_rows_values(ws), target_path)
+    for i, ws in enumerate(sheets):
+        if use_numeric_sheet_names:
+            sheet_identifier = str(i)
+        else:
+            sheet_identifier = _sanitize_filename(ws.title)
+        target_path = base_output.parent / f"{base_output.name}_{sheet_identifier}.csv"
+        _write_csv(_iter_rows_values(ws), target_path)
     
     return 0
 
 
 # Backward-compatible alias (deprecated)
-def excel_to_csv(input_xlsx: Path | str, output_csv: Path | str) -> int:
+def excel_to_csv(input_xlsx: Path | str, output_csv: Path | str, use_numeric_sheet_names: bool = False, include_hidden_sheets: bool = False) -> int:
     """Deprecated alias for convert_file. Will be removed in a future release."""
-    return convert_file(input_xlsx, output_csv)
+    return convert_file(input_xlsx, output_csv, use_numeric_sheet_names, include_hidden_sheets)
 
 
 def read_sheet(input_xlsx: Path | str) -> List[List[Optional[object]]]:

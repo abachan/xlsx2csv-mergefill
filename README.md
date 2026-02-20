@@ -11,7 +11,7 @@ Excelファイル（.xlsx）を、データ処理に適したCSV形式へ変換�
 ## インストール
 
 ```bash
-pip install xlsx2csv-mergefill
+pip install xlsx2csv_mergefill
 ```
 
 ## 使い方
@@ -21,10 +21,21 @@ pip install xlsx2csv-mergefill
 ```python
 from xlsx2csv_mergefill import convert_file
 
+# 基本的な使用方法
 convert_file("input.xlsx", "output")
+
+# シート名を数値にする場合
+convert_file("input.xlsx", "output", use_numeric_sheet_names=True)
+
+# 非表示シートも含めて出力する場合
+convert_file("input.xlsx", "output", include_hidden_sheets=True)
 ```
 
-→ 複数シートの場合は `<指定パスの拡張子なし>_シート名.csv` という形式で同ディレクトリに複数出力されます。単一シートの場合は第2引数で指定したパスに1ファイルをそのまま出力します（拡張子の自動付与は行いません）。
+→ 出力形式：
+- 通常：`<指定パスの拡張子なし>_シート名.csv` という形式で同ディレクトリに出力されます
+- 数値オプション使用時：`<指定パスの拡張子なし>_0.csv`, `<指定パスの拡張子なし>_1.csv` という形式で出力されます
+
+※ 1シートの場合でも、シート名（または数値）が付与されたファイル名で出力されます。
 
 ### 2. 特定シートをPythonリストとして読み込み
 
@@ -45,7 +56,9 @@ data = read_workbook("input.xlsx")
 **引数**
 
 * `input_path`: 入力Excelファイルのパス
-* `output_path`: 出力先のパス。複数シートの場合はプレフィックスとして扱われ、`<指定パスの拡張子なし>_シート名.csv` を同ディレクトリに出力します。単一シートの場合はこのパスにそのまま出力します（例：`out.csv` を指定すると `out.csv` を出力）。
+* `output_path`: 出力先のパス。プレフィックスとして扱われ、`<指定パスの拡張子なし>_シート名.csv` を同ディレクトリに出力します。
+* `use_numeric_sheet_names` (オプション): `True` を指定すると、シート名の代わりに数値（0, 1, 2...）を使用してファイル名を生成します。デフォルトは `False`。
+* `include_hidden_sheets` (オプション): `True` を指定すると、非表示シートも含めて出力します。デフォルトは `False`（非表示シートは出力しない）。
 
 **戻り値**
 
