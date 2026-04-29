@@ -80,28 +80,55 @@ def _build_merged_value_map(ws: Worksheet) -> Dict[CellCoord, Optional[object]]:
     """マージセルの値マップを構築"""
     merged_map: Dict[CellCoord, Optional[object]] = {}
     for mr in ws.merged_cells.ranges:
-        min_row, min_col, max_row, max_col = mr.min_row, mr.min_col, mr.max_row, mr.max_col
-        top_left_val = ws.cell(min_row, min_col).value
-        for r in range(min_row, max_row + 1):
-            for c in range(min_col, max_col + 1):
+        # ws.cell() はセルを生成・キャッシュするため、_cells.get() で既存セルのみ参照する
+        top_left = ws._cells.get((mr.min_row, mr.min_col))
+        top_left_val = top_left.value if top_left is not None else None
+        for r in range(mr.min_row, mr.max_row + 1):
+            for c in range(mr.min_col, mr.max_col + 1):
                 merged_map[(r, c)] = top_left_val
     return merged_map
 
 
+def _get_cell_value(
+    ws: Worksheet,
+    merged_map: Dict[CellCoord, Optional[object]],
+    r: int,
+    c: int,
+) -> Optional[object]:
+    """マージセルを考慮してセルの値を返す（ws.cell() を避けてメモリを節約）"""
+    key = (r, c)
+    if key in merged_map:
+        return merged_map[key]
+    cell = ws._cells.get(key)
+    return cell.value if cell is not None else None
+
+
+def _effective_bounds(
+    ws: Worksheet,
+    merged_map: Dict[CellCoord, Optional[object]],
+) -> Tuple[int, int]:
+    """値（None以外）が存在する最終行・最終列を返す"""
+    last_row = last_col = 0
+    # 実際に存在するセルのみ走査（ws.cell() での不要なセル生成を回避）
+    for (r, c), cell in ws._cells.items():
+        val = merged_map.get((r, c), cell.value)
+        if val is not None:
+            last_row = max(last_row, r)
+            last_col = max(last_col, c)
+    # マージ範囲内の非左上隅セルも考慮
+    for (r, c), val in merged_map.items():
+        if val is not None:
+            last_row = max(last_row, r)
+            last_col = max(last_col, c)
+    return last_row, last_col
+
+
 def _iter_rows_values(ws: Worksheet) -> Iterable[List[Optional[object]]]:
     """ワークシートからマージセル展開済みの行データを取得"""
-    max_row = ws.max_row or 0
-    max_col = ws.max_column or 0
     merged_map = _build_merged_value_map(ws)
-
-    for r in range(1, max_row + 1):
-        row_vals: List[Optional[object]] = []
-        for c in range(1, max_col + 1):
-            val = ws.cell(r, c).value
-            if (r, c) in merged_map:
-                val = merged_map[(r, c)]
-            row_vals.append(val)
-        yield row_vals
+    last_row, last_col = _effective_bounds(ws, merged_map)
+    for r in range(1, last_row + 1):
+        yield [_get_cell_value(ws, merged_map, r, c) for c in range(1, last_col + 1)]
 
 
 def convert_file(input_xlsx: Path | str, output_csv: Path | str, use_numeric_sheet_names: bool = False, include_hidden_sheets: bool = False) -> int:
@@ -129,10 +156,7 @@ def convert_file(input_xlsx: Path | str, output_csv: Path | str, use_numeric_she
         base_output = output_path.with_suffix("")
 
         for i, ws in enumerate(sheets):
-            if use_numeric_sheet_names:
-                sheet_identifier = str(i)
-            else:
-                sheet_identifier = _sanitize_filename(ws.title)
+            sheet_identifier = str(i) if use_numeric_sheet_names else _sanitize_filename(ws.title)
             target_path = base_output.parent / f"{base_output.name}_{sheet_identifier}.csv"
             _write_csv(_iter_rows_values(ws), target_path)
 
@@ -153,10 +177,9 @@ def read_sheet(input_xlsx: Path | str) -> List[List[Optional[object]]]:
     try:
         ws = wb.active
         if ws is None:
-            sheets = wb.worksheets
-            if not sheets:
+            if not wb.worksheets:
                 raise ValueError("ワークシートが見つかりません")
-            ws = sheets[0]
+            ws = wb.worksheets[0]
         return list(_iter_rows_values(ws))
     finally:
         wb.close()
@@ -203,7 +226,7 @@ def to_csv_string(data: List[List[Optional[object]]]) -> str:
     output = io.StringIO()
     writer = csv.writer(output, delimiter=",", quoting=csv.QUOTE_MINIMAL)
     for row in data:
-        writer.writerow(["" if v is None else str(v) for v in row])
+        writer.writerow(_serialize_row(row))
     return output.getvalue()
 
 
@@ -213,10 +236,15 @@ def data_to_csv_string(data: List[List[Optional[object]]]) -> str:
     return to_csv_string(data)
 
 
+def _serialize_row(row: List[Optional[object]]) -> List[str]:
+    """行データを文字列リストに変換（None は空文字列）"""
+    return ["" if v is None else str(v) for v in row]
+
+
 def _write_csv(rows: Iterable[List[Optional[object]]], out_path: Path) -> None:
     """内部用CSV書き込み関数（UTF-8/カンマ区切り固定）"""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", newline="", encoding="UTF-8") as f:
         writer = csv.writer(f, delimiter=",", quoting=csv.QUOTE_MINIMAL)
         for row in rows:
-            writer.writerow(["" if v is None else str(v) for v in row])
+            writer.writerow(_serialize_row(row))
