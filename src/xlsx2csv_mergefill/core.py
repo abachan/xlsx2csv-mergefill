@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional, Iterable, List, Tuple, Dict
 
 from openpyxl import load_workbook
-from openpyxl.cell.cell import Cell
+from openpyxl.cell.cell import Cell, MergedCell
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.workbook.workbook import Workbook
 
@@ -77,9 +77,9 @@ def _sanitize_filename(name: str) -> str:
     return sanitized if sanitized else "Sheet"
 
 
-def _get_display_value(cell: Cell | None) -> Optional[object]:
+def _get_display_value(cell: Cell | MergedCell | None) -> Optional[object]:
     """Excel 上で実際に見える値だけを返す。"""
-    if cell is None:
+    if cell is None or isinstance(cell, MergedCell):
         return None
 
     value = cell.value
