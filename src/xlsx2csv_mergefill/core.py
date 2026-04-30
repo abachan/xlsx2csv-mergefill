@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional, Iterable, List, Tuple, Dict
 
 from openpyxl import load_workbook
+from openpyxl.cell.cell import Cell
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.workbook.workbook import Workbook
 
@@ -76,13 +77,34 @@ def _sanitize_filename(name: str) -> str:
     return sanitized if sanitized else "Sheet"
 
 
+def _get_display_value(cell: Cell | None) -> Optional[object]:
+    """Excel 上で実際に見える値だけを返す。"""
+    if cell is None:
+        return None
+
+    value = cell.value
+    if value is None:
+        return None
+
+    hyperlink = getattr(cell, "hyperlink", None)
+    if hyperlink is not None:
+        location = getattr(hyperlink, "location", None)
+        target = getattr(hyperlink, "target", None)
+        # hyperlink 要素のみで定義された内部リンクは、openpyxl が参照先を
+        # cell.value に設定することがある。Excel 上ではセル値として表示されないため除外する。
+        if target is None and location and value == location:
+            return None
+
+    return value
+
+
 def _build_merged_value_map(ws: Worksheet) -> Dict[CellCoord, Optional[object]]:
     """マージセルの値マップを構築"""
     merged_map: Dict[CellCoord, Optional[object]] = {}
     for mr in ws.merged_cells.ranges:
         # ws.cell() はセルを生成・キャッシュするため、_cells.get() で既存セルのみ参照する
         top_left = ws._cells.get((mr.min_row, mr.min_col))
-        top_left_val = top_left.value if top_left is not None else None
+        top_left_val = _get_display_value(top_left)
         for r in range(mr.min_row, mr.max_row + 1):
             for c in range(mr.min_col, mr.max_col + 1):
                 merged_map[(r, c)] = top_left_val
@@ -100,7 +122,7 @@ def _get_cell_value(
     if key in merged_map:
         return merged_map[key]
     cell = ws._cells.get(key)
-    return cell.value if cell is not None else None
+    return _get_display_value(cell)
 
 
 def _effective_bounds(
@@ -111,7 +133,7 @@ def _effective_bounds(
     last_row = last_col = 0
     # 実際に存在するセルのみ走査（ws.cell() での不要なセル生成を回避）
     for (r, c), cell in ws._cells.items():
-        val = merged_map.get((r, c), cell.value)
+        val = merged_map.get((r, c), _get_display_value(cell))
         if val is not None:
             last_row = max(last_row, r)
             last_col = max(last_col, c)
