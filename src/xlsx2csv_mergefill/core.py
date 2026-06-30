@@ -15,6 +15,9 @@ from openpyxl.workbook.workbook import Workbook
 # 型エイリアス
 CellCoord = Tuple[int, int]
 
+# UTF-8換算で101バイト以上の値は結合セル範囲へ補填しない
+DEFAULT_MERGE_FILL_MAX_BYTES = 100
+
 
 def _strip_phonetic_from_xlsx(data: io.BytesIO) -> io.BytesIO:
     """xlsx ファイルのワークシート XML からルビ（phonetic）関連の要素・属性を除去する。
@@ -98,13 +101,23 @@ def _get_display_value(cell: Cell | MergedCell | None) -> Optional[object]:
     return value
 
 
-def _build_merged_value_map(ws: Worksheet) -> Dict[CellCoord, Optional[object]]:
+def _should_merge_fill(value: Optional[object], merge_fill_max_bytes: int) -> bool:
+    """マージセル範囲へ値を補填してよいかを返す。"""
+    return value is None or len(str(value).encode("utf-8")) <= merge_fill_max_bytes
+
+
+def _build_merged_value_map(
+    ws: Worksheet,
+    merge_fill_max_bytes: int = DEFAULT_MERGE_FILL_MAX_BYTES,
+) -> Dict[CellCoord, Optional[object]]:
     """マージセルの値マップを構築"""
     merged_map: Dict[CellCoord, Optional[object]] = {}
     for mr in ws.merged_cells.ranges:
         # ws.cell() はセルを生成・キャッシュするため、_cells.get() で既存セルのみ参照する
         top_left = ws._cells.get((mr.min_row, mr.min_col))
         top_left_val = _get_display_value(top_left)
+        if not _should_merge_fill(top_left_val, merge_fill_max_bytes):
+            continue
         for r in range(mr.min_row, mr.max_row + 1):
             for c in range(mr.min_col, mr.max_col + 1):
                 merged_map[(r, c)] = top_left_val
@@ -145,15 +158,24 @@ def _effective_bounds(
     return last_row, last_col
 
 
-def _iter_rows_values(ws: Worksheet) -> Iterable[List[Optional[object]]]:
+def _iter_rows_values(
+    ws: Worksheet,
+    merge_fill_max_bytes: int = DEFAULT_MERGE_FILL_MAX_BYTES,
+) -> Iterable[List[Optional[object]]]:
     """ワークシートからマージセル展開済みの行データを取得"""
-    merged_map = _build_merged_value_map(ws)
+    merged_map = _build_merged_value_map(ws, merge_fill_max_bytes)
     last_row, last_col = _effective_bounds(ws, merged_map)
     for r in range(1, last_row + 1):
         yield [_get_cell_value(ws, merged_map, r, c) for c in range(1, last_col + 1)]
 
 
-def convert_file(input_xlsx: Path | str, output_csv: Path | str, use_numeric_sheet_names: bool = False, include_hidden_sheets: bool = False) -> int:
+def convert_file(
+    input_xlsx: Path | str,
+    output_csv: Path | str,
+    use_numeric_sheet_names: bool = False,
+    include_hidden_sheets: bool = False,
+    merge_fill_max_bytes: int = DEFAULT_MERGE_FILL_MAX_BYTES,
+) -> int:
     """
     ExcelファイルをCSVファイルに変換する（シンプル版）
     
@@ -162,6 +184,7 @@ def convert_file(input_xlsx: Path | str, output_csv: Path | str, use_numeric_she
         output_csv: 出力CSVファイルのパス
         use_numeric_sheet_names: Trueの場合、シート名を数値でカウントアップ（0, 1, 2...）
         include_hidden_sheets: Trueの場合、非表示シートも出力する。デフォルトはFalse
+        merge_fill_max_bytes: マージセル補填する値の最大バイト数（UTF-8換算）。デフォルトは100
     """
     wb = _load_workbook(input_xlsx)
     try:
@@ -180,7 +203,7 @@ def convert_file(input_xlsx: Path | str, output_csv: Path | str, use_numeric_she
         for i, ws in enumerate(sheets):
             sheet_identifier = str(i) if use_numeric_sheet_names else _sanitize_filename(ws.title)
             target_path = base_output.parent / f"{base_output.name}_{sheet_identifier}.csv"
-            _write_csv(_iter_rows_values(ws), target_path)
+            _write_csv(_iter_rows_values(ws, merge_fill_max_bytes), target_path)
 
         return 0
     finally:
@@ -188,12 +211,21 @@ def convert_file(input_xlsx: Path | str, output_csv: Path | str, use_numeric_she
 
 
 # Backward-compatible alias (deprecated)
-def excel_to_csv(input_xlsx: Path | str, output_csv: Path | str, use_numeric_sheet_names: bool = False, include_hidden_sheets: bool = False) -> int:
+def excel_to_csv(
+    input_xlsx: Path | str,
+    output_csv: Path | str,
+    use_numeric_sheet_names: bool = False,
+    include_hidden_sheets: bool = False,
+    merge_fill_max_bytes: int = DEFAULT_MERGE_FILL_MAX_BYTES,
+) -> int:
     """Deprecated alias for convert_file. Will be removed in a future release."""
-    return convert_file(input_xlsx, output_csv, use_numeric_sheet_names, include_hidden_sheets)
+    return convert_file(input_xlsx, output_csv, use_numeric_sheet_names, include_hidden_sheets, merge_fill_max_bytes)
 
 
-def read_sheet(input_xlsx: Path | str) -> List[List[Optional[object]]]:
+def read_sheet(
+    input_xlsx: Path | str,
+    merge_fill_max_bytes: int = DEFAULT_MERGE_FILL_MAX_BYTES,
+) -> List[List[Optional[object]]]:
     """Excelファイルからデータを読み込んでリスト形式で返す（シンプル版）"""
     wb = _load_workbook(input_xlsx)
     try:
@@ -202,30 +234,39 @@ def read_sheet(input_xlsx: Path | str) -> List[List[Optional[object]]]:
             if not wb.worksheets:
                 raise ValueError("ワークシートが見つかりません")
             ws = wb.worksheets[0]
-        return list(_iter_rows_values(ws))
+        return list(_iter_rows_values(ws, merge_fill_max_bytes))
     finally:
         wb.close()
 
 
 # Backward-compatible alias (deprecated)
-def load_excel_data(input_xlsx: Path | str) -> List[List[Optional[object]]]:
+def load_excel_data(
+    input_xlsx: Path | str,
+    merge_fill_max_bytes: int = DEFAULT_MERGE_FILL_MAX_BYTES,
+) -> List[List[Optional[object]]]:
     """Deprecated alias for read_sheet. Will be removed in a future release."""
-    return read_sheet(input_xlsx)
+    return read_sheet(input_xlsx, merge_fill_max_bytes)
 
 
-def read_workbook(input_xlsx: Path | str) -> Dict[str, List[List[Optional[object]]]]:
+def read_workbook(
+    input_xlsx: Path | str,
+    merge_fill_max_bytes: int = DEFAULT_MERGE_FILL_MAX_BYTES,
+) -> Dict[str, List[List[Optional[object]]]]:
     """Excelファイルの全シートからデータを読み込んで辞書形式で返す（シンプル版）"""
     wb = _load_workbook(input_xlsx)
     try:
-        return {ws.title: list(_iter_rows_values(ws)) for ws in wb.worksheets}
+        return {ws.title: list(_iter_rows_values(ws, merge_fill_max_bytes)) for ws in wb.worksheets}
     finally:
         wb.close()
 
 
 # Backward-compatible alias (deprecated)
-def load_all_sheets_data(input_xlsx: Path | str) -> Dict[str, List[List[Optional[object]]]]:
+def load_all_sheets_data(
+    input_xlsx: Path | str,
+    merge_fill_max_bytes: int = DEFAULT_MERGE_FILL_MAX_BYTES,
+) -> Dict[str, List[List[Optional[object]]]]:
     """Deprecated alias for read_workbook. Will be removed in a future release."""
-    return read_workbook(input_xlsx)
+    return read_workbook(input_xlsx, merge_fill_max_bytes)
 
 
 def list_sheets(input_xlsx: Path | str) -> List[str]:

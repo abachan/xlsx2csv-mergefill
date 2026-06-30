@@ -29,6 +29,9 @@ convert_file("input.xlsx", "output", use_numeric_sheet_names=True)
 
 # 非表示シートも含めて出力する場合
 convert_file("input.xlsx", "output", include_hidden_sheets=True)
+
+# 結合セル補完の最大バイト数を変更する場合
+convert_file("input.xlsx", "output", merge_fill_max_bytes=200)
 ```
 
 → 出力形式：
@@ -43,6 +46,9 @@ convert_file("input.xlsx", "output", include_hidden_sheets=True)
 from xlsx2csv_mergefill import read_sheet
 
 rows = read_sheet("input.xlsx")
+
+# 結合セル補完の最大バイト数を変更する場合
+rows = read_sheet("input.xlsx", merge_fill_max_bytes=200)
 ```
 
 ### 3. 全シートを辞書形式で読み込み
@@ -51,6 +57,9 @@ rows = read_sheet("input.xlsx")
 from xlsx2csv_mergefill import read_workbook
 
 data = read_workbook("input.xlsx")
+
+# 結合セル補完の最大バイト数を変更する場合
+data = read_workbook("input.xlsx", merge_fill_max_bytes=200)
 ```
 
 **引数**
@@ -59,6 +68,7 @@ data = read_workbook("input.xlsx")
 * `output_path`: 出力先のパス。プレフィックスとして扱われ、`<指定パスの拡張子なし>_シート名.csv` を同ディレクトリに出力します。
 * `use_numeric_sheet_names` (オプション): `True` を指定すると、シート名の代わりに数値（0, 1, 2...）を使用してファイル名を生成します。デフォルトは `False`。
 * `include_hidden_sheets` (オプション): `True` を指定すると、非表示シートも含めて出力します。デフォルトは `False`（非表示シートは出力しない）。
+* `merge_fill_max_bytes` (オプション): 結合セルの左上セル値を結合範囲へ補完する最大バイト数です（UTF-8換算）。デフォルトは `100`。
 
 **戻り値**
 
@@ -73,6 +83,7 @@ data = read_workbook("input.xlsx")
 * 入力形式は `.xlsx` のみ対応（`.xls` 非対応）
 * 出力形式は `UTP-8` / カンマ区切り固定
 * 数式セルは計算済みの値として取得されます
+* 結合セルの左上セル値が UTF-8 換算で `merge_fill_max_bytes + 1` バイト以上の場合、結合範囲への補完は行いません
 
 ## ライセンス
 
