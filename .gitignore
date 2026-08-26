@@ -1,5 +1,6 @@
 .pytest_cache/
 test
+tests
 pyproject.toml
 requirements-dev.txt
 __pycache__
