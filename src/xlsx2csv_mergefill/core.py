@@ -8,15 +8,21 @@ from typing import Dict, List, Optional
 from openpyxl.worksheet.worksheet import Worksheet
 
 # 従来 core.py に存在した内部名も、互換性のためこのモジュールから参照可能にする。
-from ._csv import _sanitize_filename, _serialize_row, _write_csv, to_csv_string
-from ._workbook import (
+from ._csv import (  # noqa: F401 -- 旧内部名を互換性のため再公開する
+    _sanitize_filename,
+    _serialize_row,
+    _write_csv,
+    to_csv_string,
+)
+from ._workbook import (  # noqa: F401 -- 旧内部名を互換性のため再公開する
     _load_workbook,
+    _open_workbook,
     _prepare_xlsx_for_cell_data,
     _repair_chartsheet_custom_views,
     _strip_drawing_relationships,
     _strip_phonetic_from_xlsx,
 )
-from ._worksheet import (
+from ._worksheet import (  # noqa: F401 -- 旧内部名を互換性のため再公開する
     DEFAULT_MERGE_FILL_MAX_BYTES,
     CellCoord,
     _build_merged_value_map,
@@ -44,8 +50,7 @@ def convert_file(
         include_hidden_sheets: Trueの場合、非表示シートも出力する。デフォルトはFalse
         merge_fill_max_bytes: マージセル補填する値の最大バイト数（UTF-8換算）。デフォルトは100
     """
-    workbook = _load_workbook(input_xlsx)
-    try:
+    with _open_workbook(input_xlsx) as workbook:
         # グラフシートを含め、Excel 上のシート順をそのまま使用する。
         # グラフシート自体にはセルがないため、空の CSV として出力する。
         sheets = [workbook[sheet_name] for sheet_name in workbook.sheetnames]
@@ -65,7 +70,9 @@ def convert_file(
                 if use_numeric_sheet_names
                 else _sanitize_filename(sheet.title)
             )
-            target_path = base_output.parent / f"{base_output.name}_{sheet_identifier}.csv"
+            target_path = (
+                base_output.parent / f"{base_output.name}_{sheet_identifier}.csv"
+            )
             rows = (
                 _iter_rows_values(sheet, merge_fill_max_bytes)
                 if isinstance(sheet, Worksheet)
@@ -74,8 +81,6 @@ def convert_file(
             _write_csv(rows, target_path)
 
         return 0
-    finally:
-        workbook.close()
 
 
 # Backward-compatible alias (deprecated)
@@ -101,16 +106,13 @@ def read_sheet(
     merge_fill_max_bytes: int = DEFAULT_MERGE_FILL_MAX_BYTES,
 ) -> List[List[Optional[object]]]:
     """Excelファイルのアクティブなワークシートをリスト形式で返す。"""
-    workbook = _load_workbook(input_xlsx)
-    try:
+    with _open_workbook(input_xlsx) as workbook:
         worksheet = workbook.active
         if not isinstance(worksheet, Worksheet):
             if not workbook.worksheets:
                 raise ValueError("ワークシートが見つかりません")
             worksheet = workbook.worksheets[0]
         return list(_iter_rows_values(worksheet, merge_fill_max_bytes))
-    finally:
-        workbook.close()
 
 
 # Backward-compatible alias (deprecated)
@@ -127,20 +129,15 @@ def read_workbook(
     merge_fill_max_bytes: int = DEFAULT_MERGE_FILL_MAX_BYTES,
 ) -> Dict[str, List[List[Optional[object]]]]:
     """Excelファイルの全シートを辞書形式で返す。"""
-    workbook = _load_workbook(input_xlsx)
-    try:
+    with _open_workbook(input_xlsx) as workbook:
         return {
             sheet.title: (
                 list(_iter_rows_values(sheet, merge_fill_max_bytes))
                 if isinstance(sheet, Worksheet)
                 else []
             )
-            for sheet in (
-                workbook[sheet_name] for sheet_name in workbook.sheetnames
-            )
+            for sheet in (workbook[sheet_name] for sheet_name in workbook.sheetnames)
         }
-    finally:
-        workbook.close()
 
 
 # Backward-compatible alias (deprecated)
@@ -154,11 +151,8 @@ def load_all_sheets_data(
 
 def list_sheets(input_xlsx: Path | str) -> List[str]:
     """Excelファイルのシート名一覧を取得する。"""
-    workbook = _load_workbook(input_xlsx)
-    try:
+    with _open_workbook(input_xlsx) as workbook:
         return workbook.sheetnames
-    finally:
-        workbook.close()
 
 
 # Backward-compatible alias (deprecated)

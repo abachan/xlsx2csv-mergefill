@@ -1,6 +1,8 @@
 .pytest_cache/
 test
-tests
+tests/*
+!tests/test_filename_formula.py
+!tests/test_workbook_preparation.py
 pyproject.toml
 requirements-dev.txt
 __pycache__
